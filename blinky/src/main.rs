@@ -11,12 +11,10 @@
 #![no_std]
 #![no_main]
 
-use ws63_hal::gpio::{create_output_pin, Pin};
-use ws63_hal::peripherals::Peripherals;
-use ws63_hal::prelude::*;
+use ws63_hal::gpio::create_output_pin;
 use ws63_rt::entry;
 
-/// Simple busy-wait delay (cycles ~240 MHz).
+/// Simple busy-wait delay (~240 MHz CPU clock).
 fn delay_ms(ms: u32) {
     // Approximate: 240 cycles = 1 µs at 240 MHz
     for _ in 0..ms {
@@ -28,27 +26,22 @@ fn delay_ms(ms: u32) {
 
 #[entry]
 fn main() -> ! {
-    // Take ownership of all peripherals
-    let peripherals = Peripherals::take().expect("Failed to take peripherals");
-
-    // Configure GPIO0 as output (board LED pin)
-    let led_pin = Pin::new(0);
-    let mut led = create_output_pin(led_pin, peripherals.GPIO0)
-        .expect("Failed to create LED output pin");
+    // Configure GPIO pin 0 as output (board LED on WS63 EVB)
+    let mut led = create_output_pin(0);
 
     loop {
         // LED on
-        led.set_high().ok();
+        led.set_high();
         delay_ms(500);
 
         // LED off
-        led.set_low().ok();
+        led.set_low();
         delay_ms(500);
     }
 }
 
 #[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
+fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {
         core::hint::spin_loop();
     }
