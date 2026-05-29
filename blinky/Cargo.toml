@@ -10,9 +10,9 @@ name = "blinky"
 path = "src/main.rs"
 
 [dependencies]
-ws63-pac = { version = "0.1", git = "https://github.com/sanchuanhehe/ws63-pac" }
-ws63-hal = { version = "0.1", git = "https://github.com/sanchuanhehe/ws63-hal" }
-ws63-rt  = { version = "0.1", git = "https://github.com/sanchuanhehe/ws63-rt" }
+ws63-pac = { path = "../../ws63-pac" }
+ws63-hal = { path = "../../ws63-hal" }
+ws63-rt  = { path = "../../ws63-rt" }
 embedded-hal = "1.0.0"
 riscv = "0.13"
 
