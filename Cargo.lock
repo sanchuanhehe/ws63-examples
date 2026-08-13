@@ -701,9 +701,9 @@ checksum = "82838ac70a30951282f15df5741eeb38f748f5347d419c91b93751ceccc49876"
 
 [[package]]
 name = "hisi-rf"
-version = "0.1.0-alpha.88"
+version = "0.1.0-alpha.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d0da6d7cbce82e6cef3b33737d5cbbf8a6af538100444da99187033803b5635"
+checksum = "a8a25cd01ec4adf1cfb5035b5da60277bd7e953889a7ec50943954078cb176ae"
 dependencies = [
  "hisi-rf-core",
  "hisi-rf-ws63",
@@ -722,9 +722,9 @@ dependencies = [
 
 [[package]]
 name = "hisi-rf-link"
-version = "0.1.0-alpha.18"
+version = "0.1.0-alpha.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "512db26a3086bf41901cd2449f3ac6d26b489e3c3fd67f79409105afcdcca1f2"
+checksum = "732fb54f41e27601c00e18a639b659528fff1d83fd5098dea680fcc9e45635a3"
 
 [[package]]
 name = "hisi-rf-rtos-driver"
@@ -735,9 +735,9 @@ dependencies = [
 
 [[package]]
 name = "hisi-rf-ws63"
-version = "0.1.0-alpha.76"
+version = "0.1.0-alpha.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66258981c4e130f2e30f52133229e0e3e158d01cbbf575bd5e2efc47ebfa2cac"
+checksum = "f54da840f6cf0a2f388a3690661e687bf1a2cd937cdc8e251c0d1955e559b6be"
 dependencies = [
  "ar_archive_writer",
  "critical-section",
@@ -1644,9 +1644,9 @@ dependencies = [
 
 [[package]]
 name = "ws63-radio-blob"
-version = "0.1.0-alpha.18"
+version = "0.1.0-alpha.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8af5014114cc9d69a06abcc47c39a24e498872894f0b226891205cc5ec781857"
+checksum = "73dd39abfdb875dfbc232091cfc1f89fcf88f8b4fb6f9e0cf315ed89de342750"
 dependencies = [
  "ruzstd",
  "serde",
@@ -1656,9 +1656,9 @@ dependencies = [
 
 [[package]]
 name = "ws63-radio-sys"
-version = "0.1.0-alpha.18"
+version = "0.1.0-alpha.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2636b6d89c8fb79918afa8b6b1c8ebbb82d00652effcae7860d1e4341bce630"
+checksum = "aa59a846275e74d481b0ec2e6f2145d52e96dc9ccfd423e4cc3ef144a1f3e448"
 dependencies = [
  "hisi-rf-link",
  "hisi-rom-sys-ws63",
