@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+- Updated the Wi-Fi STA and SoftAP fixtures to `hisi-rf 0.1.0-alpha.97`,
+  closing the release chain over `hisi-rf-ws63 0.1.0-alpha.83` and
+  `ws63-radio-sys 0.1.0-alpha.21` with hardware-backed BLE Secure
+  Connections key generation and ECDH.
+
 - Updated the Wi-Fi STA and SoftAP fixtures to `hisi-rf 0.1.0-alpha.85`, whose
   release train consumes the published WS63 BLE B1 archive closure without
   exposing a BLE application API.
