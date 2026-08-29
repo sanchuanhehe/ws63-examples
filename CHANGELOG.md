@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+- Updated the Wi-Fi STA and SoftAP fixtures to `hisi-rf 0.1.0-alpha.101`,
+  closing the U7 release train over `hisi-rf-ws63 0.1.0-alpha.86`,
+  `hisi-rf-rtos-driver 0.1.0-alpha.20`, and `hisi-rtos 0.1.0-alpha.25`.
+  The selected named profiles now use the same admission and shared-platform
+  versions that passed the fixed-image coexistence initialization matrices.
+
 - Updated the Wi-Fi STA and SoftAP fixtures to `hisi-rf 0.1.0-alpha.97`,
   closing the release chain over `hisi-rf-ws63 0.1.0-alpha.83` and
   `ws63-radio-sys 0.1.0-alpha.21` with hardware-backed BLE Secure
