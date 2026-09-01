@@ -9,48 +9,58 @@
 ))]
 compile_error!("select exactly one SoftAP security profile: `wpa2` or `wpa3`");
 
-#[cfg(all(feature = "sle-coexistence", not(feature = "wpa2")))]
-compile_error!("the U7 SLE coexistence fixture currently requires the WPA2 SoftAP profile");
+#[cfg(all(
+    any(feature = "ble-coexistence", feature = "sle-coexistence"),
+    not(feature = "wpa2")
+))]
+compile_error!("the U7 coexistence fixture currently requires the WPA2 SoftAP profile");
+
+#[cfg(all(feature = "ble-coexistence", feature = "sle-coexistence"))]
+compile_error!("select exactly one coexistence activity: `ble-coexistence` or `sle-coexistence`");
 
 #[path = "../../hil_wifi_config.rs"]
 mod config;
 mod network;
 
 use core::num::NonZeroU32;
-#[cfg(feature = "sle-coexistence")]
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
 use core::num::NonZeroUsize;
 
 use hisi_hal::Peripherals;
 use hisi_hal::delay::Delay;
 use hisi_hal::interrupt;
 use hisi_hal::rf_power::RfPower;
-#[cfg(not(feature = "sle-coexistence"))]
+#[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
 use hisi_hal::software_interrupt::SoftwareInterrupt0;
 use hisi_hal::time::Instant;
-#[cfg(not(feature = "sle-coexistence"))]
+#[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
 use hisi_hal::timer::TimerAlarm0;
 use hisi_hal::uart::{Config as UartConfig, Uart, UartClock};
 use hisi_hal::wdt::Watchdog;
 use hisi_panic_handler as _;
-#[cfg(not(feature = "sle-coexistence"))]
+#[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
 use hisi_rf::ws63::{
     AccessPointConfig, AccessPointResources, InstalledAccessPointStorage,
     declare_access_point_storage,
 };
+#[cfg(feature = "ble-coexistence")]
+use hisi_rf_ws63::WifiWpa2AccessPointBleCoexistence;
 #[cfg(feature = "sle-coexistence")]
-use hisi_rf_ws63::{
-    Profile, RadioArenaStorage, RadioStorage, Storage, WifiWpa2AccessPointSleCoexistence,
-};
+use hisi_rf_ws63::WifiWpa2AccessPointSleCoexistence;
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
+use hisi_rf_ws63::{Profile, RadioArenaStorage, RadioStorage, Storage};
 use hisi_riscv_rt::entry;
 
-#[cfg(not(feature = "sle-coexistence"))]
+#[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
 declare_access_point_storage!(static RADIO_STORAGE);
 
-#[cfg(feature = "sle-coexistence")]
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
 const COEX_EVENTS: usize = 8;
+#[cfg(feature = "ble-coexistence")]
+type CoexProfile = WifiWpa2AccessPointBleCoexistence;
 #[cfg(feature = "sle-coexistence")]
 type CoexProfile = WifiWpa2AccessPointSleCoexistence;
-#[cfg(feature = "sle-coexistence")]
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
 static RADIO_STORAGE: RadioStorage<
     CoexProfile,
     COEX_EVENTS,
@@ -62,14 +72,14 @@ static RADIO_STORAGE: RadioStorage<
         RadioArenaStorage::new();
     RadioStorage::from_parts(&CONTROL, &ARENA)
 };
-#[cfg(feature = "sle-coexistence")]
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
 static RTOS_STORAGE: hisi_rtos::SchedulerStorage<15> = hisi_rtos::SchedulerStorage::new();
-#[cfg(feature = "sle-coexistence")]
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
 #[cfg_attr(target_arch = "riscv32", unsafe(link_section = ".hisi.shared-arena"))]
 static RTOS_ARENA: hisi_rtos::SchedulerArena<{ <CoexProfile as Profile>::RUNTIME_ARENA_BYTES }> =
     hisi_rtos::SchedulerArena::new();
 
-#[cfg(feature = "sle-coexistence")]
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
 hisi_rtos::bind_interrupts!(struct RtosIrqs {
     TIMER_INT0 => hisi_rtos::ws63::TimerInterrupt;
     SOFT_INT0 => hisi_rtos::ws63::SoftwareInterrupt;
@@ -89,7 +99,7 @@ fn main() -> ! {
     uart.write(b"\r\nRFDBG_SOFTAP_BEGIN\r\n");
 
     let installed = RADIO_STORAGE.install().expect("install SoftAP storage");
-    #[cfg(feature = "sle-coexistence")]
+    #[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
     let scheduler_storage = RTOS_STORAGE
         .install(&RTOS_ARENA)
         .expect("install SoftAP scheduler storage");
@@ -99,11 +109,11 @@ fn main() -> ! {
     let (_cldo_crg, efuse) = rf_ready.into_parts();
     uart.write(b"RFDBG_SOFTAP_RF_POWER_OK\r\n");
 
-    #[cfg(not(feature = "sle-coexistence"))]
+    #[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
     let _timer = TimerAlarm0::new(p.TIMER);
-    #[cfg(not(feature = "sle-coexistence"))]
+    #[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
     let _software_interrupt = SoftwareInterrupt0::new(p.SYS_CTL1);
-    #[cfg(not(feature = "sle-coexistence"))]
+    #[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
     let runtime = hisi_rtos::start_with_port(
         hisi_rtos::PortedConfig {
             radio_task_policy: hisi_rtos::RunPolicy::Cooperative,
@@ -124,7 +134,7 @@ fn main() -> ! {
         },
     )
     .expect("start ported runtime");
-    #[cfg(feature = "sle-coexistence")]
+    #[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
     let runtime = hisi_rtos::ws63::start(
         hisi_rtos::ws63::Config {
             minimum_stack_size: NonZeroUsize::new(CoexProfile::MINIMUM_TASK_STACK_BYTES)
@@ -142,9 +152,9 @@ fn main() -> ! {
     )
     .expect("start typed WS63 runtime");
     uart.write(b"RFDBG_SOFTAP_RTOS_OK\r\n");
-    #[cfg(not(feature = "sle-coexistence"))]
+    #[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
     let runtime_handle = &runtime;
-    #[cfg(feature = "sle-coexistence")]
+    #[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
     let runtime_handle = runtime.handle();
     let main_task = runtime_handle
         .current_task()
@@ -160,19 +170,40 @@ fn main() -> ! {
     unsafe { interrupt::enable_global() };
     uart.write(b"RFDBG_SOFTAP_IRQ_OK\r\n");
 
-    #[cfg(all(feature = "wpa2", not(feature = "sle-coexistence")))]
+    #[cfg(all(
+        feature = "wpa2",
+        not(any(feature = "ble-coexistence", feature = "sle-coexistence"))
+    ))]
     let resources = AccessPointResources::new(efuse, p.KM, p.SPACC, p.TRNG, installed);
     #[cfg(feature = "wpa3")]
     let resources = AccessPointResources::new(efuse, p.KM, p.SPACC, p.PKE, p.TRNG, installed);
-    #[cfg(all(feature = "wpa2", not(feature = "sle-coexistence")))]
+    #[cfg(all(
+        feature = "wpa2",
+        not(any(feature = "ble-coexistence", feature = "sle-coexistence"))
+    ))]
     let config =
         AccessPointConfig::wpa2_personal(config::SSID, config::PASSPHRASE, config::CHANNEL);
     #[cfg(feature = "wpa3")]
     let config = AccessPointConfig::wpa3_sae(config::SSID, config::PASSPHRASE, config::CHANNEL);
     uart.write(b"RFDBG_SOFTAP_INIT_BEGIN\r\n");
-    #[cfg(not(feature = "sle-coexistence"))]
+    #[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
     let mut access_point =
         hisi_rf::ws63::init_access_point(config, resources).expect("start native SoftAP");
+    #[cfg(feature = "ble-coexistence")]
+    let (mut access_point, ble) = {
+        let (control, arena) = installed.into_init_parts();
+        let resources = hisi_rf_ws63::Resources::<CoexProfile>::coexistence(
+            efuse, p.KM, p.SPACC, p.PKE, p.TRNG, arena,
+        );
+        let config = hisi_rf_ws63::AccessPointConfig::wpa2_personal(
+            config::SSID,
+            config::PASSPHRASE,
+            config::CHANNEL,
+        );
+        hisi_rf_ws63::init_access_point_ble_coexistence(config, resources, control)
+            .expect("start native SoftAP plus BLE")
+            .split()
+    };
     #[cfg(feature = "sle-coexistence")]
     let (mut access_point, sle) = {
         let (control, arena) = installed.into_init_parts();
@@ -192,8 +223,10 @@ fn main() -> ! {
     let network_device = access_point
         .take_network_device()
         .expect("take SoftAP network device");
-    #[cfg(not(feature = "sle-coexistence"))]
+    #[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
     network::run(access_point, network_device, &uart);
+    #[cfg(feature = "ble-coexistence")]
+    network::run(access_point, network_device, ble, &uart);
     #[cfg(feature = "sle-coexistence")]
     network::run(access_point, network_device, sle, &uart)
 }
@@ -543,7 +576,7 @@ fn hex8(value: u32) -> [u8; 8] {
     output
 }
 
-#[cfg(not(feature = "sle-coexistence"))]
+#[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
 #[unsafe(no_mangle)]
 extern "C" fn TIMER_INT0() {
     TimerAlarm0::clear_interrupt();
@@ -552,7 +585,7 @@ extern "C" fn TIMER_INT0() {
     hisi_rtos::interrupt_exit();
 }
 
-#[cfg(not(feature = "sle-coexistence"))]
+#[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
 #[unsafe(no_mangle)]
 extern "C" fn SOFT_INT0() {
     SoftwareInterrupt0::clear_interrupt();
@@ -561,14 +594,14 @@ extern "C" fn SOFT_INT0() {
     hisi_rtos::interrupt_exit();
 }
 
-#[cfg(not(feature = "sle-coexistence"))]
+#[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
 unsafe fn rtos_allocate(size: usize) -> *mut u8 {
     unsafe {
         InstalledAccessPointStorage::<{ hisi_rf::ws63::ACCESS_POINT_ARENA_BYTES }>::allocate(size)
     }
 }
 
-#[cfg(not(feature = "sle-coexistence"))]
+#[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
 unsafe fn rtos_deallocate(pointer: *mut u8) {
     unsafe {
         InstalledAccessPointStorage::<{ hisi_rf::ws63::ACCESS_POINT_ARENA_BYTES }>::deallocate(

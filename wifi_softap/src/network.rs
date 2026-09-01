@@ -69,6 +69,7 @@ struct NetworkDiagnostics {
 pub fn run(
     mut access_point: AccessPoint,
     network: AccessPointNetworkDevice,
+    #[cfg(feature = "ble-coexistence")] mut ble: hisi_rf_ws63::BleB1Controller,
     #[cfg(feature = "sle-coexistence")] mut sle: hisi_rf_ws63::SleS1Controller,
     uart: &Uart0<'_>,
 ) -> ! {
@@ -122,7 +123,11 @@ pub fn run(
     let mut next_task_diagnostic_ms = crate::monotonic_ms();
     #[cfg(feature = "sle-coexistence")]
     let mut sle_started = false;
+    #[cfg(feature = "ble-coexistence")]
+    let mut ble_started = false;
     loop {
+        #[cfg(feature = "ble-coexistence")]
+        service_ble(&mut ble, &mut ble_started, uart);
         #[cfg(feature = "sle-coexistence")]
         service_sle(&mut sle, &mut sle_started, uart);
         access_point
@@ -174,6 +179,50 @@ pub fn run(
             crate::write_rtos_task_diagnostics(uart);
             next_task_diagnostic_ms = current_ms;
         }
+    }
+}
+
+#[cfg(feature = "ble-coexistence")]
+fn service_ble(
+    controller: &mut hisi_rf_ws63::BleB1Controller,
+    started: &mut bool,
+    uart: &Uart0<'_>,
+) {
+    static ADVERTISING_DATA: &[u8] = &[
+        2, 0x01, 0x06, 9, 0x09, b'H', b'I', b'S', b'I', b'C', b'O', b'E', b'X',
+    ];
+
+    while let Some(event) = controller.next_event() {
+        match event {
+            hisi_rf_ws63::BleB2Event::Enabled { status: 0 } if !*started => {
+                controller
+                    .start_advertising(ADVERTISING_DATA)
+                    .expect("start BLE coexistence advertising");
+                *started = true;
+            }
+            hisi_rf_ws63::BleB2Event::AdvertisingState { status: 1, .. } => {
+                uart.write(b"RFDBG_COEX_BLE_SERVER_READY\r\n");
+            }
+            hisi_rf_ws63::BleB2Event::ConnectionState {
+                connected: true, ..
+            } => {
+                uart.write(b"RFDBG_COEX_BLE_SERVER_CONNECTED\r\n");
+            }
+            hisi_rf_ws63::BleB2Event::Enabled { status }
+            | hisi_rf_ws63::BleB2Event::AdvertisingData { status, .. }
+            | hisi_rf_ws63::BleB2Event::AdvertisingParameters { status, .. }
+            | hisi_rf_ws63::BleB2Event::AdvertisingState { status, .. } => {
+                uart.write(b"RFDBG_COEX_BLE_SERVER_ERR status=0x");
+                uart.write(&crate::hex8(status));
+                uart.write(b"\r\n");
+                panic!("BLE server event failure");
+            }
+            _ => {}
+        }
+    }
+    if controller.dropped_events() != 0 {
+        uart.write(b"RFDBG_COEX_BLE_SERVER_EVENT_DROP\r\n");
+        panic!("BLE server event queue overflow");
     }
 }
 
