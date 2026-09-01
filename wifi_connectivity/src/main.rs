@@ -25,8 +25,8 @@ use hisi_panic_handler as _;
 #[cfg(feature = "wpa3")]
 use hisi_rf::SaePwe;
 use hisi_rf::ws63::{
-    RadioParts, RadioRunner, RunnerDiagnosticsSnapshot, SelectedProfile, WaitDiagnosticsSnapshot,
-    WifiDevice, declare_radio_storage,
+    RadioParts, RadioRunner, RunnerDiagnosticsSnapshot, WaitDiagnosticsSnapshot, WifiDevice,
+    declare_radio_storage,
 };
 use hisi_rf::{
     DiagnosticCode, Error as WifiError, IncrementalDriverEvent, Passphrase, ScanConfig,
@@ -114,15 +114,12 @@ fn main() -> ! {
 
     uart.write(b"RF1_IMAGE_OK\r\n");
 
-    let (control_storage, radio_arena) = installed_storage.into_init_parts();
-    let resources = hisi_rf::ws63::Resources::<SelectedProfile>::builder(efuse, radio_arena)
-        .crypto(p.KM, p.SPACC, p.TRNG);
     #[cfg(feature = "wpa2")]
-    let resources = resources.build();
+    let resources = installed_storage.resources(efuse, p.KM, p.SPACC, p.TRNG);
     #[cfg(feature = "wpa3")]
-    let resources = resources.pke(p.PKE).build();
+    let resources = installed_storage.resources(efuse, p.KM, p.SPACC, p.PKE, p.TRNG);
 
-    let controller = match hisi_rf::ws63::init(config::radio_config(), resources, control_storage) {
+    let controller = match hisi_rf::ws63::init(config::radio_config(), resources) {
         Ok(controller) => controller,
         Err(error) => {
             write_diagnostic(uart, b"RF2_INIT_ERR:", error.diagnostic());
