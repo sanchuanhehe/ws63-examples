@@ -22,8 +22,8 @@ sle-coexistence = [
 [dependencies]
 hisi-hal = { version = "0.7.0-alpha.9", features = ["chip-ws63", "unstable"] }
 hisi-panic-handler = { version = "0.1.0", default-features = false, features = ["panic-uart0"] }
-hisi-rf = { version = "=0.1.0-alpha.103", features = ["chip-ws63"] }
-hisi-rf-ws63 = { version = "=0.1.0-alpha.92", optional = true, default-features = false }
+hisi-rf = { version = "=0.1.0-alpha.104", features = ["chip-ws63"] }
+hisi-rf-ws63 = { version = "=0.1.0-alpha.94", optional = true, default-features = false }
 ws63-radio-sys = { version = "=0.1.0-alpha.25", optional = true, default-features = false }
 hisi-riscv-rt = { version = "0.5.10", default-features = false, features = [
     "chip-ws63",
