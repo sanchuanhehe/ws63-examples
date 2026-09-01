@@ -38,17 +38,17 @@ use hisi_hal::timer::TimerAlarm0;
 use hisi_hal::uart::{Config as UartConfig, Uart, UartClock};
 use hisi_hal::wdt::Watchdog;
 use hisi_panic_handler as _;
+#[cfg(feature = "ble-coexistence")]
+use hisi_rf::ws63::__coexistence::WifiWpa2AccessPointBleCoexistence;
+#[cfg(feature = "sle-coexistence")]
+use hisi_rf::ws63::__coexistence::WifiWpa2AccessPointSleCoexistence;
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
+use hisi_rf::ws63::__coexistence::{Profile, RadioArenaStorage, RadioStorage, Storage};
 #[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
 use hisi_rf::ws63::{
     AccessPointConfig, AccessPointResources, InstalledAccessPointStorage,
     declare_access_point_storage,
 };
-#[cfg(feature = "ble-coexistence")]
-use hisi_rf_ws63::WifiWpa2AccessPointBleCoexistence;
-#[cfg(feature = "sle-coexistence")]
-use hisi_rf_ws63::WifiWpa2AccessPointSleCoexistence;
-#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
-use hisi_rf_ws63::{Profile, RadioArenaStorage, RadioStorage, Storage};
 use hisi_riscv_rt::entry;
 
 #[cfg(not(any(feature = "ble-coexistence", feature = "sle-coexistence")))]
@@ -192,30 +192,30 @@ fn main() -> ! {
     #[cfg(feature = "ble-coexistence")]
     let (mut access_point, ble) = {
         let (control, arena) = installed.into_init_parts();
-        let resources = hisi_rf_ws63::Resources::<CoexProfile>::coexistence(
+        let resources = hisi_rf::ws63::__coexistence::Resources::<CoexProfile>::coexistence(
             efuse, p.KM, p.SPACC, p.PKE, p.TRNG, arena,
         );
-        let config = hisi_rf_ws63::AccessPointConfig::wpa2_personal(
+        let config = hisi_rf::ws63::AccessPointConfig::wpa2_personal(
             config::SSID,
             config::PASSPHRASE,
             config::CHANNEL,
         );
-        hisi_rf_ws63::init_access_point_ble_coexistence(config, resources, control)
+        hisi_rf::ws63::__coexistence::init_access_point_ble_coexistence(config, resources, control)
             .expect("start native SoftAP plus BLE")
             .split()
     };
     #[cfg(feature = "sle-coexistence")]
     let (mut access_point, sle) = {
         let (control, arena) = installed.into_init_parts();
-        let resources = hisi_rf_ws63::Resources::<CoexProfile>::coexistence(
+        let resources = hisi_rf::ws63::__coexistence::Resources::<CoexProfile>::coexistence(
             efuse, p.KM, p.SPACC, p.PKE, p.TRNG, arena,
         );
-        let config = hisi_rf_ws63::AccessPointConfig::wpa2_personal(
+        let config = hisi_rf::ws63::AccessPointConfig::wpa2_personal(
             config::SSID,
             config::PASSPHRASE,
             config::CHANNEL,
         );
-        hisi_rf_ws63::init_access_point_sle_coexistence(config, resources, control)
+        hisi_rf::ws63::__coexistence::init_access_point_sle_coexistence(config, resources, control)
             .expect("start native SoftAP plus SLE")
             .split()
     };
