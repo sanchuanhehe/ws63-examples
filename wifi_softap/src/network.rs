@@ -21,6 +21,12 @@ const DHCP_SERVER_PORT: u16 = 67;
 const DHCP_CLIENT_PORT: u16 = 68;
 const UDP_ECHO_PORT: u16 = 9;
 const DHCP_LEASE_SECONDS: u32 = 20;
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
+const MIN_RF_HEAP_FREE_BYTES: usize = 16 * 1024;
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
+const MAX_READY_LATENCY_MS: u64 = 2_000;
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
+const MAX_IRQ_SPAN_MS: u64 = 100;
 #[cfg(feature = "sle-coexistence")]
 const SLE_SERVER_ADDRESS: SleAddress = SleAddress {
     address_type: 0,
@@ -125,6 +131,8 @@ pub fn run(
     let mut sle_started = false;
     #[cfg(feature = "ble-coexistence")]
     let mut ble_started = false;
+    #[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
+    let mut acceptance_reported = false;
     loop {
         #[cfg(feature = "ble-coexistence")]
         service_ble(&mut ble, &mut ble_started, uart);
@@ -161,6 +169,15 @@ pub fn run(
         #[cfg(feature = "data-path-diagnostics")]
         write_new_tx_timeline(uart, access_point.diagnostics(), &mut diagnostics);
 
+        #[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
+        if !acceptance_reported && diagnostics.echo_tx >= 10 {
+            #[cfg(feature = "ble-coexistence")]
+            write_coexistence_acceptance(&ble, uart);
+            #[cfg(feature = "sle-coexistence")]
+            write_coexistence_acceptance(&sle, uart);
+            acceptance_reported = true;
+        }
+
         let current_ms = crate::monotonic_ms();
         if current_ms.wrapping_sub(next_diagnostic_ms) >= 1_000 {
             #[cfg(feature = "data-path-diagnostics")]
@@ -179,6 +196,133 @@ pub fn run(
             crate::write_rtos_task_diagnostics(uart);
             next_task_diagnostic_ms = current_ms;
         }
+    }
+}
+
+#[cfg(feature = "ble-coexistence")]
+fn write_coexistence_acceptance(
+    controller: &hisi_rf::ws63::__coexistence::BleB1Controller,
+    uart: &Uart0<'_>,
+) {
+    let events = controller.event_diagnostics();
+    write_acceptance_values(
+        uart,
+        events.accepted,
+        events.consumed,
+        events.pending,
+        events.dropped,
+        events.high_water,
+    );
+}
+
+#[cfg(feature = "sle-coexistence")]
+fn write_coexistence_acceptance(
+    controller: &hisi_rf::ws63::__coexistence::SleS1Controller,
+    uart: &Uart0<'_>,
+) {
+    let events = controller.event_diagnostics();
+    write_acceptance_values(
+        uart,
+        events.accepted,
+        events.consumed,
+        events.pending,
+        events.dropped,
+        events.high_water,
+    );
+}
+
+#[cfg(any(feature = "ble-coexistence", feature = "sle-coexistence"))]
+fn write_acceptance_values(
+    uart: &Uart0<'_>,
+    accepted: u32,
+    consumed: u32,
+    pending: usize,
+    dropped: u32,
+    high_water: usize,
+) {
+    let heap = hisi_rf::ws63::__coexistence::rf_heap_metrics();
+    let scheduler = hisi_rtos::diagnostics();
+    let mut tasks = [hisi_rtos::TaskDiagnostic::default(); 17];
+    let count = hisi_rtos::task_diagnostics(&mut tasks);
+    let max_ready_ms = tasks[..count]
+        .iter()
+        .map(|task| task.max_ready_latency_ms)
+        .max()
+        .unwrap_or(0);
+    let max_irq_ms = tasks[..count]
+        .iter()
+        .map(|task| task.max_irq_span_ms)
+        .max()
+        .unwrap_or(0);
+
+    uart.write(b"RFDBG_COEX_SERVER_EVENT_CONSERVATION accepted=0x");
+    uart.write(&crate::hex8(accepted));
+    uart.write(b" consumed=0x");
+    uart.write(&crate::hex8(consumed));
+    uart.write(b" pending=0x");
+    uart.write(&crate::hex8(u32::try_from(pending).unwrap_or(u32::MAX)));
+    uart.write(b" dropped=0x");
+    uart.write(&crate::hex8(dropped));
+    uart.write(b" high_water=0x");
+    uart.write(&crate::hex8(u32::try_from(high_water).unwrap_or(u32::MAX)));
+    uart.write(b"\r\n");
+
+    uart.write(b"RFDBG_COEX_SERVER_RESOURCE_ACCEPTANCE arena=0x");
+    uart.write(&crate::hex8(
+        u32::try_from(heap.arena_bytes).unwrap_or(u32::MAX),
+    ));
+    uart.write(b" free=0x");
+    uart.write(&crate::hex8(
+        u32::try_from(heap.free_bytes).unwrap_or(u32::MAX),
+    ));
+    uart.write(b" peak=0x");
+    uart.write(&crate::hex8(
+        u32::try_from(heap.peak_used_bytes).unwrap_or(u32::MAX),
+    ));
+    uart.write(b" failures=0x");
+    uart.write(&crate::hex8(
+        u32::try_from(heap.allocation_failures).unwrap_or(u32::MAX),
+    ));
+    uart.write(b" min_free=0x");
+    uart.write(&crate::hex8(MIN_RF_HEAP_FREE_BYTES as u32));
+    uart.write(b" max_ready_ms=0x");
+    uart.write(&crate::hex8(max_ready_ms.min(u64::from(u32::MAX)) as u32));
+    uart.write(b" ready_limit_ms=0x");
+    uart.write(&crate::hex8(MAX_READY_LATENCY_MS as u32));
+    uart.write(b" max_irq_ms=0x");
+    uart.write(&crate::hex8(max_irq_ms.min(u64::from(u32::MAX)) as u32));
+    uart.write(b" irq_limit_ms=0x");
+    uart.write(&crate::hex8(MAX_IRQ_SPAN_MS as u32));
+    uart.write(b" ready_owner_err=0x");
+    uart.write(&crate::hex8(u32::from(
+        scheduler.ready_ownership_violations,
+    )));
+    uart.write(b" ready_dup=0x");
+    uart.write(&crate::hex8(u32::from(
+        scheduler.ready_queue_duplicate_memberships,
+    )));
+    uart.write(b" ready_wrong_bucket=0x");
+    uart.write(&crate::hex8(u32::from(
+        scheduler.ready_queue_wrong_priorities,
+    )));
+    uart.write(b" ready_bad_link=0x");
+    uart.write(&crate::hex8(u32::from(scheduler.ready_queue_invalid_links)));
+    uart.write(b"\r\n");
+
+    if accepted != consumed.saturating_add(u32::try_from(pending).unwrap_or(u32::MAX))
+        || dropped != 0
+        || heap.allocation_failures != 0
+        || heap.peak_used_bytes > heap.arena_bytes
+        || heap.free_bytes < MIN_RF_HEAP_FREE_BYTES
+        || max_ready_ms > MAX_READY_LATENCY_MS
+        || max_irq_ms > MAX_IRQ_SPAN_MS
+        || scheduler.ready_ownership_violations != 0
+        || scheduler.ready_queue_duplicate_memberships != 0
+        || scheduler.ready_queue_wrong_priorities != 0
+        || scheduler.ready_queue_invalid_links != 0
+    {
+        uart.write(b"RFDBG_COEX_ACCEPTANCE_ERR reason=server_resource_event\r\n");
+        panic!("coexistence server acceptance failed");
     }
 }
 
