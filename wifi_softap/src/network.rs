@@ -200,6 +200,9 @@ fn service_ble(
                     .expect("start BLE coexistence advertising");
                 *started = true;
             }
+            hisi_rf_ws63::BleB2Event::Enabled { status: 0 }
+            | hisi_rf_ws63::BleB2Event::AdvertisingData { status: 0, .. }
+            | hisi_rf_ws63::BleB2Event::AdvertisingParameters { status: 0, .. } => {}
             hisi_rf_ws63::BleB2Event::AdvertisingState { status: 1, .. } => {
                 uart.write(b"RFDBG_COEX_BLE_SERVER_READY\r\n");
             }
