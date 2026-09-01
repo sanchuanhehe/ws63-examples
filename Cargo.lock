@@ -701,9 +701,9 @@ checksum = "82838ac70a30951282f15df5741eeb38f748f5347d419c91b93751ceccc49876"
 
 [[package]]
 name = "hisi-rf"
-version = "0.1.0-alpha.110"
+version = "0.1.0-alpha.111"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe986fb0a4b30b9a9f55b6f1dabbe82649aafd4cd3cc0393a184a156d0e71fb7"
+checksum = "e422c2272b81a4df8ba1477c7ba0f96d4ac748eefbc94eceeba4f2cceac19b4f"
 dependencies = [
  "hisi-hal 0.7.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "hisi-rf-core",
