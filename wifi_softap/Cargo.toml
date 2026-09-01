@@ -10,11 +10,21 @@ default = ["wpa2"]
 wpa2 = ["hisi-rf/profile-wifi-wpa2-softap"]
 wpa3 = ["hisi-rf/profile-wifi-wpa3-softap"]
 data-path-diagnostics = ["hisi-rf/ws63-data-path-diagnostics"]
+sle-coexistence = [
+    "wpa2",
+    "dep:hisi-rf-ws63",
+    "dep:ws63-radio-sys",
+    "hisi-rf-ws63/coexistence-wifi-sle",
+    "hisi-rf-ws63/upstream-authenticator-wpa2",
+    "hisi-rf-ws63/firmware-example",
+]
 
 [dependencies]
 hisi-hal = { version = "0.7.0-alpha.9", features = ["chip-ws63", "unstable"] }
 hisi-panic-handler = { version = "0.1.0", default-features = false, features = ["panic-uart0"] }
-hisi-rf = { version = "=0.1.0-alpha.102", features = ["chip-ws63"] }
+hisi-rf = { version = "=0.1.0-alpha.103", features = ["chip-ws63"] }
+hisi-rf-ws63 = { version = "=0.1.0-alpha.92", optional = true, default-features = false }
+ws63-radio-sys = { version = "=0.1.0-alpha.25", optional = true, default-features = false }
 hisi-riscv-rt = { version = "0.5.10", default-features = false, features = [
     "chip-ws63",
     "bundled-memory-x",

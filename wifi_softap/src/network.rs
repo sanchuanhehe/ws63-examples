@@ -11,6 +11,8 @@ use smoltcp::wire::{
     DhcpMessageType, DhcpPacket, DhcpRepr, EthernetAddress, HardwareAddress, IpAddress, IpCidr,
     IpEndpoint, Ipv4Address,
 };
+#[cfg(feature = "sle-coexistence")]
+use ws63_radio_sys::sle::{Address, CONNECTION_STATE_CONNECTED};
 
 const SERVER_ADDRESS: Ipv4Address = Ipv4Address::new(192, 168, 4, 1);
 const CLIENT_ADDRESS: Ipv4Address = Ipv4Address::new(192, 168, 4, 2);
@@ -19,6 +21,11 @@ const DHCP_SERVER_PORT: u16 = 67;
 const DHCP_CLIENT_PORT: u16 = 68;
 const UDP_ECHO_PORT: u16 = 9;
 const DHCP_LEASE_SECONDS: u32 = 20;
+#[cfg(feature = "sle-coexistence")]
+const SLE_SERVER_ADDRESS: Address = Address {
+    address_type: 0,
+    bytes: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+};
 
 type Uart0<'d> = Uart<'d, hisi_hal::peripherals::Uart0<'d>>;
 
@@ -62,6 +69,7 @@ struct NetworkDiagnostics {
 pub fn run(
     mut access_point: AccessPoint,
     network: AccessPointNetworkDevice,
+    #[cfg(feature = "sle-coexistence")] mut sle: hisi_rf_ws63::SleS1Controller,
     uart: &Uart0<'_>,
 ) -> ! {
     let mut device = network.device;
@@ -112,7 +120,11 @@ pub fn run(
     }
     let mut next_diagnostic_ms = crate::monotonic_ms();
     let mut next_task_diagnostic_ms = crate::monotonic_ms();
+    #[cfg(feature = "sle-coexistence")]
+    let mut sle_started = false;
     loop {
+        #[cfg(feature = "sle-coexistence")]
+        service_sle(&mut sle, &mut sle_started, uart);
         access_point
             .poll(NonZeroU32::new(16).unwrap())
             .expect("poll native authenticator");
@@ -162,6 +174,53 @@ pub fn run(
             crate::write_rtos_task_diagnostics(uart);
             next_task_diagnostic_ms = current_ms;
         }
+    }
+}
+
+#[cfg(feature = "sle-coexistence")]
+fn service_sle(
+    controller: &mut hisi_rf_ws63::SleS1Controller,
+    started: &mut bool,
+    uart: &Uart0<'_>,
+) {
+    while let Some(event) = controller.next_event() {
+        match event {
+            hisi_rf_ws63::SleS1Event::Enabled { status: 0 } if !*started => {
+                static mut ANNOUNCE_DATA: [u8; 7] = [1, 1, 1, 3, 2, 0x0b, 0x06];
+                static mut SEEK_RESPONSE_DATA: [u8; 10] =
+                    [5, 8, b'H', b'I', b'S', b'I', b'S', b'L', b'E', b'2'];
+                if controller.set_local_address(SLE_SERVER_ADDRESS).is_err() {
+                    panic!("set SLE server address");
+                }
+                let announce = unsafe { &mut *core::ptr::addr_of_mut!(ANNOUNCE_DATA) };
+                let response = unsafe { &mut *core::ptr::addr_of_mut!(SEEK_RESPONSE_DATA) };
+                if controller.start_announce(announce, response).is_err() {
+                    panic!("start SLE server announce");
+                }
+                *started = true;
+            }
+            hisi_rf_ws63::SleS1Event::AnnounceEnabled { status: 0, .. } => {
+                uart.write(b"RFDBG_COEX_SLE_SERVER_READY\r\n");
+            }
+            hisi_rf_ws63::SleS1Event::ConnectionStateChanged {
+                connection_state: CONNECTION_STATE_CONNECTED,
+                ..
+            } => {
+                uart.write(b"RFDBG_COEX_SLE_SERVER_CONNECTED\r\n");
+            }
+            hisi_rf_ws63::SleS1Event::Enabled { status }
+            | hisi_rf_ws63::SleS1Event::AnnounceEnabled { status, .. } => {
+                uart.write(b"RFDBG_COEX_SLE_SERVER_ERR status=0x");
+                uart.write(&crate::hex8(status));
+                uart.write(b"\r\n");
+                panic!("SLE server event failure");
+            }
+            _ => {}
+        }
+    }
+    if controller.dropped_events() != 0 {
+        uart.write(b"RFDBG_COEX_SLE_SERVER_EVENT_DROP\r\n");
+        panic!("SLE server event queue overflow");
     }
 }
 

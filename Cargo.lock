@@ -701,9 +701,9 @@ checksum = "82838ac70a30951282f15df5741eeb38f748f5347d419c91b93751ceccc49876"
 
 [[package]]
 name = "hisi-rf"
-version = "0.1.0-alpha.102"
+version = "0.1.0-alpha.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b13a7d006e9ed9ab02872c6d909354b9076907c70f71ddcda7320cbc0652f64c"
+checksum = "d6f553a812124a4675998261da4b43323fd47b85104504a64b0223b29b949099"
 dependencies = [
  "hisi-rf-core",
  "hisi-rf-ws63",
@@ -735,9 +735,9 @@ dependencies = [
 
 [[package]]
 name = "hisi-rf-ws63"
-version = "0.1.0-alpha.90"
+version = "0.1.0-alpha.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2180a7289a8fb0fd20c397382a86b1e4ad2d74778b4aca35fc97d52da072952"
+checksum = "9dba0c75f764385f613dfa01ca8f3fbe94268be06119766379f026df249fe836"
 dependencies = [
  "ar_archive_writer",
  "critical-section",
@@ -1592,9 +1592,11 @@ dependencies = [
  "hisi-hal 0.7.0-alpha.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "hisi-panic-handler 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hisi-rf",
+ "hisi-rf-ws63",
  "hisi-riscv-rt 0.5.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "hisi-rtos",
  "smoltcp",
+ "ws63-radio-sys",
 ]
 
 [[package]]
