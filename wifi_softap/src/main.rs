@@ -17,13 +17,17 @@ mod config;
 mod network;
 
 use core::num::NonZeroU32;
+#[cfg(feature = "sle-coexistence")]
+use core::num::NonZeroUsize;
 
 use hisi_hal::Peripherals;
 use hisi_hal::delay::Delay;
 use hisi_hal::interrupt;
 use hisi_hal::rf_power::RfPower;
+#[cfg(not(feature = "sle-coexistence"))]
 use hisi_hal::software_interrupt::SoftwareInterrupt0;
 use hisi_hal::time::Instant;
+#[cfg(not(feature = "sle-coexistence"))]
 use hisi_hal::timer::TimerAlarm0;
 use hisi_hal::uart::{Config as UartConfig, Uart, UartClock};
 use hisi_hal::wdt::Watchdog;
@@ -35,8 +39,7 @@ use hisi_rf::ws63::{
 };
 #[cfg(feature = "sle-coexistence")]
 use hisi_rf_ws63::{
-    InstalledRadioStorage, Profile, RadioArenaStorage, RadioStorage, Storage,
-    WifiWpa2AccessPointSleCoexistence,
+    Profile, RadioArenaStorage, RadioStorage, Storage, WifiWpa2AccessPointSleCoexistence,
 };
 use hisi_riscv_rt::entry;
 
@@ -59,6 +62,18 @@ static RADIO_STORAGE: RadioStorage<
         RadioArenaStorage::new();
     RadioStorage::from_parts(&CONTROL, &ARENA)
 };
+#[cfg(feature = "sle-coexistence")]
+static RTOS_STORAGE: hisi_rtos::SchedulerStorage<15> = hisi_rtos::SchedulerStorage::new();
+#[cfg(feature = "sle-coexistence")]
+#[cfg_attr(target_arch = "riscv32", unsafe(link_section = ".hisi.shared-arena"))]
+static RTOS_ARENA: hisi_rtos::SchedulerArena<{ <CoexProfile as Profile>::RUNTIME_ARENA_BYTES }> =
+    hisi_rtos::SchedulerArena::new();
+
+#[cfg(feature = "sle-coexistence")]
+hisi_rtos::bind_interrupts!(struct RtosIrqs {
+    TIMER_INT0 => hisi_rtos::ws63::TimerInterrupt;
+    SOFT_INT0 => hisi_rtos::ws63::SoftwareInterrupt;
+});
 
 #[entry]
 fn main() -> ! {
@@ -74,14 +89,21 @@ fn main() -> ! {
     uart.write(b"\r\nRFDBG_SOFTAP_BEGIN\r\n");
 
     let installed = RADIO_STORAGE.install().expect("install SoftAP storage");
+    #[cfg(feature = "sle-coexistence")]
+    let scheduler_storage = RTOS_STORAGE
+        .install(&RTOS_ARENA)
+        .expect("install SoftAP scheduler storage");
     uart.write(b"RFDBG_SOFTAP_STORAGE_OK\r\n");
     let mut delay = Delay::new();
     let rf_ready = RfPower::new(p.CMU, p.CLDO_CRG).enable(p.EFUSE, &mut delay);
     let (_cldo_crg, efuse) = rf_ready.into_parts();
     uart.write(b"RFDBG_SOFTAP_RF_POWER_OK\r\n");
 
+    #[cfg(not(feature = "sle-coexistence"))]
     let _timer = TimerAlarm0::new(p.TIMER);
+    #[cfg(not(feature = "sle-coexistence"))]
     let _software_interrupt = SoftwareInterrupt0::new(p.SYS_CTL1);
+    #[cfg(not(feature = "sle-coexistence"))]
     let runtime = hisi_rtos::start_with_port(
         hisi_rtos::PortedConfig {
             radio_task_policy: hisi_rtos::RunPolicy::Cooperative,
@@ -102,9 +124,32 @@ fn main() -> ! {
         },
     )
     .expect("start ported runtime");
+    #[cfg(feature = "sle-coexistence")]
+    let runtime = hisi_rtos::ws63::start(
+        hisi_rtos::ws63::Config {
+            minimum_stack_size: NonZeroUsize::new(CoexProfile::MINIMUM_TASK_STACK_BYTES)
+                .expect("profile minimum task stack"),
+            radio_task_policy: hisi_rtos::RunPolicy::Cooperative,
+            max_scheduler_lock_duration: NonZeroU32::new(5_000).unwrap(),
+        },
+        hisi_rtos::ws63::Resources {
+            timer: p.TIMER,
+            software_interrupt: p.SYS_CTL1,
+            storage: scheduler_storage,
+            contract_violation: rtos_contract_violation,
+            irqs: RtosIrqs::new(),
+        },
+    )
+    .expect("start typed WS63 runtime");
     uart.write(b"RFDBG_SOFTAP_RTOS_OK\r\n");
-    let main_task = runtime.current_task().expect("adopted SoftAP main task");
-    runtime
+    #[cfg(not(feature = "sle-coexistence"))]
+    let runtime_handle = &runtime;
+    #[cfg(feature = "sle-coexistence")]
+    let runtime_handle = runtime.handle();
+    let main_task = runtime_handle
+        .current_task()
+        .expect("adopted SoftAP main task");
+    runtime_handle
         .set_task_run_policy(
             main_task,
             hisi_rtos::RunPolicy::Preemptive {
@@ -498,6 +543,7 @@ fn hex8(value: u32) -> [u8; 8] {
     output
 }
 
+#[cfg(not(feature = "sle-coexistence"))]
 #[unsafe(no_mangle)]
 extern "C" fn TIMER_INT0() {
     TimerAlarm0::clear_interrupt();
@@ -506,6 +552,7 @@ extern "C" fn TIMER_INT0() {
     hisi_rtos::interrupt_exit();
 }
 
+#[cfg(not(feature = "sle-coexistence"))]
 #[unsafe(no_mangle)]
 extern "C" fn SOFT_INT0() {
     SoftwareInterrupt0::clear_interrupt();
@@ -514,29 +561,19 @@ extern "C" fn SOFT_INT0() {
     hisi_rtos::interrupt_exit();
 }
 
+#[cfg(not(feature = "sle-coexistence"))]
 unsafe fn rtos_allocate(size: usize) -> *mut u8 {
-    #[cfg(not(feature = "sle-coexistence"))]
     unsafe {
-        return InstalledAccessPointStorage::<{ hisi_rf::ws63::ACCESS_POINT_ARENA_BYTES }>::allocate(
-            size,
-        );
-    }
-    #[cfg(feature = "sle-coexistence")]
-    unsafe {
-        InstalledRadioStorage::<CoexProfile, COEX_EVENTS>::allocate(size)
+        InstalledAccessPointStorage::<{ hisi_rf::ws63::ACCESS_POINT_ARENA_BYTES }>::allocate(size)
     }
 }
 
+#[cfg(not(feature = "sle-coexistence"))]
 unsafe fn rtos_deallocate(pointer: *mut u8) {
-    #[cfg(not(feature = "sle-coexistence"))]
     unsafe {
         InstalledAccessPointStorage::<{ hisi_rf::ws63::ACCESS_POINT_ARENA_BYTES }>::deallocate(
             pointer,
         )
-    };
-    #[cfg(feature = "sle-coexistence")]
-    unsafe {
-        InstalledRadioStorage::<CoexProfile, COEX_EVENTS>::deallocate(pointer)
     };
 }
 
