@@ -42,8 +42,8 @@ compile_error!("select exactly one station security profile: wpa2 or wpa3");
 
 use config::{
     CONNECT_OPERATION_TIMEOUT, CONNECT_WAIT_DEADLINE, EVENT_WAIT_DEADLINE,
-    INITIALIZE_WAIT_DEADLINE, RUNNER_BUDGET, SCAN_OPERATION_TIMEOUT, SCAN_RESULT_DEPTH,
-    SCAN_WAIT_DEADLINE, TEST_PASSPHRASE, TEST_SSID,
+    HIL_START_DELAY_MS, INITIALIZE_WAIT_DEADLINE, RUNNER_BUDGET, SCAN_OPERATION_TIMEOUT,
+    SCAN_RESULT_DEPTH, SCAN_WAIT_DEADLINE, TEST_PASSPHRASE, TEST_SSID,
 };
 
 type Uart0 = Uart<'static, hisi_hal::peripherals::Uart0<'static>>;
@@ -75,13 +75,19 @@ fn main() -> ! {
     Watchdog::new(p.WDT).disable();
     uart.write(b"\r\nRFDBG_CONNECTIVITY_BEGIN facade=hisi-rf\r\n");
 
+    let mut delay = Delay::new();
+    if HIL_START_DELAY_MS != 0 {
+        uart.write(b"RFDBG_HIL_START_DELAY_BEGIN\r\n");
+        delay.delay_millis(HIL_START_DELAY_MS);
+        uart.write(b"RFDBG_HIL_START_DELAY_END\r\n");
+    }
+
     let installed_storage = RADIO_STORAGE
         .install()
         .expect("install caller-owned radio storage");
     let scheduler_storage = RTOS_STORAGE
         .install(&RTOS_ARENA)
         .expect("install caller-owned scheduler storage");
-    let mut delay = Delay::new();
     let rf_ready = RfPower::new(p.CMU, p.CLDO_CRG).enable(p.EFUSE, &mut delay);
     let (_cldo_crg, efuse) = rf_ready.into_parts();
 
