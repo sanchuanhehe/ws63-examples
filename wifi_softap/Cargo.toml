@@ -22,7 +22,7 @@ sle-coexistence = [
 [dependencies]
 hisi-hal = { version = "0.7.0-alpha.9", features = ["chip-ws63", "unstable"] }
 hisi-panic-handler = { version = "0.1.0", default-features = false, features = ["panic-uart0"] }
-hisi-rf = { version = "=0.1.0-alpha.114", features = ["chip-ws63"] }
+hisi-rf = { version = "=0.1.0-alpha.115", features = ["chip-ws63"] }
 hisi-riscv-rt = { version = "0.5.10", default-features = false, features = [
     "chip-ws63",
     "bundled-memory-x",
